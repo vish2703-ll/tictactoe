@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Tic-Tac-Toe</title>
+<style>
+  :root{
+    --bg:#0f1724; --card:#111827; --accent:#2dd4bf; --muted:#94a3b8; --win:#10b981;
+  }
+  *{box-sizing:border-box;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,'Helvetica Neue',Arial}
+  body{margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; background:
+    linear-gradient(180deg,#0b1220 0%, #101321 100%); color:#e6eef8; padding:20px}
+  .app{
+    width:100%; max-width:980px; background:linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+    border-radius:14px; padding:28px; box-shadow:0 8px 30px rgba(2,6,23,0.6); display:grid; grid-template-columns: 1fr 360px; gap:24px;
+  }
+  .left { padding:18px; }
+  h1{margin:0 0 10px; font-size:28px; letter-spacing:1px}
+  p.subtitle{margin:0 0 20px; color:var(--muted) }
+
+  /* board */
+  .board {
+    display:grid;
+    grid-template-columns: repeat(3, 100px);
+    grid-template-rows: repeat(3, 100px);
+    gap:12px;
+    justify-content:center;
+    margin:10px 0 0;
+  }
+  @media (max-width:880px){
+    .app{grid-template-columns: 1fr; padding:18px}
+    .board{grid-template-columns:repeat(3, 80px); grid-template-rows:repeat(3,80px)}
+  }
+  .cell{
+    width:100px; height:100px; display:flex; align-items:center; justify-content:center;
+    background:linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.00));
+    border-radius:10px; font-size:48px; cursor:pointer; user-select:none; transition:transform .08s ease, box-shadow .08s;
+    box-shadow: 0 4px 14px rgba(2,6,23,0.6), inset 0 -2px 0 rgba(255,255,255,0.01);
+  }
+  .cell:hover{transform:translateY(-3px)}
+  .cell.disabled{cursor:default; opacity:0.9}
+  .controls{display:flex; flex-direction:column; gap:12px}
+  .panel { background:rgba(255,255,255,0.02); border-radius:10px; padding:12px; color:var(--muted)}
+  .radio-row{display:flex; gap:8px; align-items:center}
+  button{
+    padding:10px 14px; border-radius:10px; border:0; cursor:pointer; font-weight:600;
+    background:var(--accent); color:#042022;
+  }
+  .small{font-size:13px; padding:8px 10px}
+  .info{font-size:15px; margin:6px 0}
+  .score {display:flex; gap:12px; align-items:center; font-size:14px}
+  .score .item{background:rgba(255,255,255,0.02); padding:8px 10px; border-radius:8px}
+
+  .line {
+    position:absolute; height:6px; background:var(--win); border-radius:6px; transform-origin:center;
+    box-shadow:0 6px 18px rgba(16,185,129,0.18); transition:opacity .2s;
+  }
+  .footer{margin-top:16px; color:var(--muted); font-size:13px}
+</style>
+</head>
+<body>
+  <div class="app" role="application" aria-label="Tic Tac Toe">
+    <div class="left">
+      <h1>Tic-Tac-Toe</h1>
+      <p class="subtitle">Play against a friend or the computer. Click a square to make a move.</p>
+
+      <div id="boardWrap" style="position:relative">
+        <div id="line" class="line" style="opacity:0"></div>
+        <div id="board" class="board" aria-live="polite"></div>
+      </div>
+
+      <div class="footer">Tip: Try to take the center, then corners for better chances.</div>
+    </div>
+
+    <aside class="controls">
+      <div class="panel">
+        <div class="info"><strong>Mode</strong></div>
+        <div class="radio-row">
+          <label><input type="radio" name="mode" value="pvp" checked> Two players</label>
+          <label style="margin-left:8px"><input type="radio" name="mode" value="cpu"> Vs Computer</label>
+        </div>
+        <div style="margin-top:10px" class="info">
+          <label><input type="checkbox" id="firstX" checked> Human plays X (first)</label>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="info"><strong>Game status</strong></div>
+        <div id="status" class="info">X's turn</div>
+        <div class="score">
+          <div class="item">X: <span id="scoreX">0</span></div>
+          <div class="item">O: <span id="scoreO">0</span></div>
+          <div class="item">Draws: <span id="scoreD">0</span></div>
+        </div>
+        <div style="margin-top:10px; display:flex; gap:8px">
+          <button id="restart" class="small">Restart Round</button>
+          <button id="resetAll" class="small" style="background:#ef4444; color:white">Reset Scores</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="info"><strong>Accessibility</strong></div>
+        <div class="info">You can also use keyboard: arrows to move focus and Enter/Space to place mark.</div>
+      </div>
+
+    </aside>
+  </div>
+
+<script>
+(() => {
+  const WIN_LINES = [
+    [0,1,2],[3,4,5],[6,7,8],
+    [0,3,6],[1,4,7],[2,5,8],
+    [0,4,8],[2,4,6]
+  ];
+
+  // state
+  let board = Array(9).fill(null);
+  let current = 'X';
+  let running = true;
+  let scores = {X:0, O:0, D:0};
+  const boardEl = document.getElementById('board');
+  const statusEl = document.getElementById('status');
+  const scoreXEl = document.getElementById('scoreX');
+  const scoreOEl = document.getElementById('scoreO');
+  const scoreDEl = document.getElementById('scoreD');
+  const restartBtn = document.getElementById('restart');
+  const resetAllBtn = document.getElementById('resetAll');
+  const modeInputs = document.querySelectorAll('input[name="mode"]');
+  const firstXCheckbox = document.getElementById('firstX');
+  const lineEl = document.getElementById('line');
+
+  function createBoard() {
+    boardEl.innerHTML = '';
+    for (let i=0;i<9;i++){
+      const cell = document.createElement('div');
+      cell.className = 'cell';
+      cell.setAttribute('data-index', i);
+      cell.setAttribute('tabindex', 0);
+      cell.setAttribute('role','button');
+      cell.addEventListener('click', onCellClick);
+      cell.addEventListener('keydown', (e)=> {
+        if(e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onCellClick.call(cell,e); }
+        // arrow navigation
+        const idx = Number(cell.dataset.index);
+        if(e.key === 'ArrowRight'){ focusCell((idx+1)%9) }
+        if(e.key === 'ArrowLeft'){ focusCell((idx+8)%9) }
+        if(e.key === 'ArrowDown'){ focusCell((idx+3)%9) }
+        if(e.key === 'ArrowUp'){ focusCell((idx+6)%9) }
+      });
+      boardEl.appendChild(cell);
+    }
+  }
+
+  function focusCell(i){
+    const el = boardEl.querySelector(`[data-index="${i}"]`);
+    if(el) el.focus();
+  }
+
+  function onCellClick(e){
+    if(!running) return;
+    const i = Number(this.dataset.index);
+    // if cell occupied
+    if(board[i]) return;
+    // place mark
+    playMove(i, current);
+    // after placing, if vs CPU and game still running and it's CPU turn, call cpuMove
+    if(running && getMode() === 'cpu' && current === cpuMark()) {
+      // tiny delay to make it feel natural
+      setTimeout(()=> cpuMove(), 250);
+    }
+  }
+
+  function playMove(index, mark){
+    board[index] = mark;
+    render();
+    const res = checkGame();
+    if(res) {
+      endRound(res);
+    } else {
+      // switch current
+      current = (current === 'X') ? 'O' : 'X';
+      updateStatus();
+    }
+  }
+
+  function updateStatus(){
+    statusEl.textContent = running ? `${current}'s turn` : statusEl.textContent;
+  }
+
+  function checkGame(){
+    // return {winner: 'X'|'O'|null, line: [i,i,i]} or {draw:true}
+    for(const line of WIN_LINES){
+      const [a,b,c] = line;
+      if(board[a] && board[a] === board[b] && board[a] === board[c]){
+        return { winner: board[a], line};
+      }
+    }
+    if(board.every(Boolean)){
+      return { draw: true };
+    }
+    return null;
+  }
+
+  function endRound(result){
+    running = false;
+    if(result.draw){
+      statusEl.textContent = 'Draw!';
+      scores.D++;
+      scoreDEl.textContent = scores.D;
+      showLine(null); // hide
+    } else {
+      const w = result.winner;
+      statusEl.textContent = `${w} wins!`;
+      scores[w]++;
+      scoreXEl.textContent = scores.X;
+      scoreOEl.textContent = scores.O;
+      showLine(result.line);
+      // highlight winning cells slightly
+      result.line.forEach(i => {
+        const el = boardEl.querySelector(`[data-index="${i}"]`);
+        if(el) {
+          el.style.boxShadow = '0 10px 30px rgba(16,185,129,0.12)';
+        }
+      });
+    }
+    // disable pointer
+    boardEl.querySelectorAll('.cell').forEach(c => c.classList.add('disabled'));
+  }
+
+  function showLine(line){
+    if(!line) {
+      lineEl.style.opacity = 0;
+      return;
+    }
+    // compute start and end positions of cells to draw a line
+    const cell0 = boardEl.children[line[0]];
+    const cell2 = boardEl.children[line[2]];
+    if(!cell0 || !cell2) { lineEl.style.opacity = 0; return; }
+    const r = boardEl.getBoundingClientRect();
+    const a = cell0.getBoundingClientRect();
+    const b = cell2.getBoundingClientRect();
+    // center positions relative to boardWrap
+    const x1 = ((a.left + a.right)/2) - r.left;
+    const y1 = ((a.top + a.bottom)/2) - r.top;
+    const x2 = ((b.left + b.right)/2) - r.left;
+    const y2 = ((b.top + b.bottom)/2) - r.top;
+    const dx = x2-x1, dy = y2-y1;
+    const length = Math.hypot(dx,dy);
+    const angle = Math.atan2(dy,dx) * 180/Math.PI;
+    lineEl.style.width = length + 'px';
+    lineEl.style.left = (x1 + (dx/2) - (length/2)) + 'px';
+    lineEl.style.top = (y1 + dy/2 - 3) + 'px';
+    lineEl.style.transform = `rotate(${angle}deg)`;
+    lineEl.style.opacity = 1;
+  }
+
+  function render(){
+    for(let i=0;i<9;i++){
+      const el = boardEl.children[i];
+      el.textContent = board[i] || '';
+      el.setAttribute('aria-label', `Cell ${i+1} ${board[i] ? 'occupied by '+board[i]: 'empty'}`);
+    }
+  }
+
+  // game control
+  restartBtn.addEventListener('click', ()=> {
+    resetBoard();
+    // If CPU mode and computer goes first, make cpu move
+    if(getMode() === 'cpu' && cpuMark() === current) setTimeout(()=> cpuMove(), 220);
+  });
+  resetAllBtn.addEventListener('click', ()=> {
+    scores = {X:0,O:0,D:0};
+    scoreXEl.textContent = 0;
+    scoreOEl.textContent = 0;
+    scoreDEl.textContent = 0;
+    resetBoard();
+  });
+
+  modeInputs.forEach(i => i.addEventListener('change', ()=> {
+    resetBoard();
+    // if vs CPU and CPU should start, let it move
+    if(getMode() === 'cpu' && cpuMark() === current) setTimeout(()=> cpuMove(), 220);
+  }));
+  firstXCheckbox.addEventListener('change', ()=>{
+    resetBoard();
+  });
+
+  function resetBoard(){
+    board = Array(9).fill(null);
+    running = true;
+    // set current depending on firstX
+    current = firstXCheckbox.checked ? 'X' : 'O';
+    render();
+    updateStatus();
+    boardEl.querySelectorAll('.cell').forEach(c => {
+      c.classList.remove('disabled');
+      c.style.boxShadow = '';
+    });
+    showLine(null);
+  }
+
+  function getMode(){ return document.querySelector('input[name="mode"]:checked').value; }
+  function cpuMark(){ return firstXCheckbox.checked ? 'O' : 'X'; }
+  function humanMark(){ return cpuMark() === 'X' ? 'O' : 'X'; }
+
+  // CPU strategy: win if possible, block if needed, take center, take corners, else random.
+  function cpuMove(){
+    if(!running) return;
+    const mark = cpuMark();
+    const opp = humanMark();
+
+    // helper to find win/block move
+    function findLineFor(player){
+      for(const line of WIN_LINES){
+        const vals = line.map(i => board[i]);
+        const countPlayer = vals.filter(v => v === player).length;
+        const countEmpty = vals.filter(v => v === null).length;
+        if(countPlayer === 2 && countEmpty === 1){
+          const emptyIndex = line[vals.indexOf(null)];
+          return emptyIndex;
+        }
+      }
+      return -1;
+    }
+
+    // 1) win
+    let idx = findLineFor(mark);
+    // 2) block
+    if(idx === -1) idx = findLineFor(opp);
+    // 3) take center
+    if(idx === -1 && board[4] === null) idx = 4;
+    // 4) take corner
+    const corners = [0,2,6,8];
+    if(idx === -1){
+      const availCorners = corners.filter(i => board[i] === null);
+      if(availCorners.length) idx = availCorners[Math.floor(Math.random()*availCorners.length)];
+    }
+    // 5) fallback random
+    if(idx === -1){
+      const avail = board.map((v,i)=> v===null ? i : null).filter(v => v !== null);
+      if(avail.length === 0) return;
+      idx = avail[Math.floor(Math.random()*avail.length)];
+    }
+
+    playMove(idx, mark);
+  }
+
+  // keyboard accessibility: start by focusing cell 0
+  createBoard();
+  resetBoard();
+  focusCell(0);
+
+  // if vs CPU and CPU starts initially
+  if(getMode() === 'cpu' && cpuMark() === current){
+    setTimeout(()=> cpuMove(), 300);
+  }
+
+  // handle window resize to re-calc line
+  window.addEventListener('resize', ()=> showLine(null));
+
+})();
+</script>
+</body>
+</html>
